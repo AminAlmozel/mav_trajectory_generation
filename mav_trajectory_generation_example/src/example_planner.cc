@@ -1,4 +1,5 @@
 #include <mav_trajectory_generation_example/example_planner.h>
+#include <chrono>
 
 ExamplePlanner::ExamplePlanner(ros::NodeHandle& nh) :
     nh_(nh),
@@ -30,6 +31,7 @@ ExamplePlanner::ExamplePlanner(ros::NodeHandle& nh) :
 
 // Callback to get current Pose of UAV
 void ExamplePlanner::uavPathCallback(const nav_msgs::Path::ConstPtr& path) {
+    std::chrono::time_point<std::chrono::system_clock> m_StartTime = std::chrono::system_clock::now();
     ROS_WARN("Message recieved! called Callback function.");
 
     //Eigen::Affine3d* p_ = new Eigen::Affine3d[3];
@@ -53,6 +55,8 @@ void ExamplePlanner::uavPathCallback(const nav_msgs::Path::ConstPtr& path) {
     publishTrajectory(trajectory);
 
     ROS_WARN("Trajectory published");
+    std::chrono::time_point<std::chrono::system_clock> m_EndTime = std::chrono::system_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(m_EndTime - m_StartTime).count()/1000.0;
 
 }
 
