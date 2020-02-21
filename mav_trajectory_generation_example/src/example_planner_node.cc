@@ -24,7 +24,6 @@ int main(int argc, char** argv) {
 
     ros::NodeHandle n;
     PTG planner(n);
-    //ROS_WARN_STREAM("SLEEPING FOR 1s TO WAIT FOR CLEAR CONSOLE");
     //ros::Duration(1.0).sleep();
 
     ros::spin();

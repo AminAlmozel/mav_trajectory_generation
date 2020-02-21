@@ -46,6 +46,8 @@ class PTG {
   ros::Subscriber sub_to_airSim_gate;
   ros::Subscriber sub_to_airSim_state;
 
+  mav_trajectory_generation::Trajectory full_traj;
+
   ros::NodeHandle& nh_;
   Eigen::Affine3d current_pose_;
   Eigen::Vector3d current_position_;  

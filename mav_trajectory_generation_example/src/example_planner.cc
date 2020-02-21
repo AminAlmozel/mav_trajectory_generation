@@ -41,7 +41,8 @@ void PTG::gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg){
 
     int n_of_poses = int(msg->poses[0].position.x);
     n_of_gates = n_of_poses - 1;
-    section_length = n_of_gates - 1;
+    //section_length = n_of_gates - 1;
+    section_length = 4;
 
     geometry_msgs::Pose pos;
     // Store the gates' poses and the initial position locally
@@ -203,10 +204,12 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     const int dimension = 3;
 
     ROS_INFO_STREAM("Starting path generation loop!");
+    std::cout << "Here";
     // Start section planning
     //for(ith_gate; ith_gate < n_of_gates - section_length; ith_gate++){
     // Array for all waypoints and their constrains
     mav_trajectory_generation::Vertex::Vector vertices;
+    std::cout << "Here";
     vertices.clear();
 
     // Optimze up to 4th order derivative (SNAP)
@@ -261,7 +264,32 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
 
     // get trajectory as polynomial parameters
     opt.getTrajectory(&(*trajectory));
-    
+    trajectory->scaleSegmentTimesToMeetConstraints(max_v_, max_a_);
+/*
+    // Add segments.
+    std::cout << "Here";
+    mav_trajectory_generation::Segment::Vector segments;
+    std::cout << "Here";
+    trajectory->getSegments(&segments);
+    std::cout << "Here";
+    full_traj.addSegments(segments);
+    */
+
+    /*
+    std::vector<mav_trajectory_generation::Trajectory> trajectories;
+    const std::vector<mav_trajectory_generation::Trajectory>& t = {full_traj, (*trajectory)};
+
+    //trajectories.push_back(full_traj);
+    //trajectories.push_back((*trajectory));
+    mav_trajectory_generation::Trajectory::addTrajectories(&t, &full_traj);
+    for (const Trajectory& t : trajectories) {
+        // Add segments.
+        Segment::Vector segments;
+        t.getSegments(&segments);
+        merged->addSegments(segments);
+    }
+    */
+
     // Update initial position for the next iteration
     // Eigen::Vector3d
     current_position_;
@@ -273,7 +301,8 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     // Store the trajectory in memory
 
     // Maybe try bool Trajectory::addTrajectories(const std::vector<Trajectory>& trajectories, Trajectory* merged) const {
-    ith_gate += 1;
+    //ith_gate += 1;
+    ith_gate += section_length;
     if (ith_gate == n_of_gates){
         ROS_INFO_STREAM("Finished generating the whole trajectory");
     }
