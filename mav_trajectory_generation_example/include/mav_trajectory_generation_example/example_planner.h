@@ -48,9 +48,15 @@ class PTG {
 
   ros::NodeHandle& nh_;
   Eigen::Affine3d current_pose_;
+  Eigen::Vector3d current_position_;  
   Eigen::Vector3d current_velocity_;
+  Eigen::Vector3d current_acceleration_;
   Eigen::Vector3d current_angular_velocity_;
-  Eigen::Affine3d* p_ = new Eigen::Affine3d[3];
+  //Eigen::Affine3d* p_ = new Eigen::Affine3d[3];
+  Eigen::Affine3d p_;
+
+
+
 
   geometry_msgs::PoseArray gates;
 
@@ -60,6 +66,7 @@ class PTG {
   double max_ang_a_;
   int ith_gate;
   int n_of_gates;
+  int section_length;
 
 };
 
