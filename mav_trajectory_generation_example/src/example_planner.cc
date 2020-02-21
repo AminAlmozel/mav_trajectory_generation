@@ -200,16 +200,14 @@ void PTG::setMaxSpeed(const double max_v) {
 
 bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
 
+    ROS_INFO_STREAM("Starting path generation loop!");
     // 3 Dimensional trajectory => through carteisan space, no orientation
     const int dimension = 3;
 
-    ROS_INFO_STREAM("Starting path generation loop!");
-    std::cout << "Here";
     // Start section planning
     //for(ith_gate; ith_gate < n_of_gates - section_length; ith_gate++){
     // Array for all waypoints and their constrains
     mav_trajectory_generation::Vertex::Vector vertices;
-    std::cout << "Here";
     vertices.clear();
 
     // Optimze up to 4th order derivative (SNAP)
@@ -265,15 +263,20 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     // get trajectory as polynomial parameters
     opt.getTrajectory(&(*trajectory));
     trajectory->scaleSegmentTimesToMeetConstraints(max_v_, max_a_);
-/*
+
     // Add segments.
-    std::cout << "Here";
-    mav_trajectory_generation::Segment::Vector segments;
-    std::cout << "Here";
-    trajectory->getSegments(&segments);
-    std::cout << "Here";
-    full_traj.addSegments(segments);
-    */
+    if (ith_gate == 0){
+        full_traj = *trajectory;
+    }
+    else{
+        mav_trajectory_generation::Segment::Vector segments;
+
+        trajectory->getSegments(&segments);
+
+        full_traj.addSegments(segments);        
+    }
+
+
 
     /*
     std::vector<mav_trajectory_generation::Trajectory> trajectories;
