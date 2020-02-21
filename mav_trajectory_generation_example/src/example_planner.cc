@@ -152,7 +152,7 @@ void PTG::uavPathCallback(const nav_msgs::Path::ConstPtr& path) {
 
 void PTG::generate_path(){
     
-    //std::chrono::time_point<std::chrono::system_clock> m_StartTime = std::chrono::system_clock::now();
+    std::chrono::time_point<std::chrono::system_clock> m_StartTime = std::chrono::system_clock::now();
 
     /*
     geometry_msgs::Vector3 v_;
@@ -167,13 +167,14 @@ void PTG::generate_path(){
     mav_trajectory_generation::Trajectory trajectory;
 
     planTrajectory(&trajectory);
-    /*
-    publishTrajectory(trajectory);
 
-    ROS_WARN("Trajectory published");
+
+    //publishTrajectory(trajectory);
+    //ROS_WARN("Trajectory published");
+
     std::chrono::time_point<std::chrono::system_clock> m_EndTime = std::chrono::system_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(m_EndTime - m_StartTime).count()/1000.0;
-    */
+
 }
 // Method to set maximum speed.
 void PTG::setMaxSpeed(const double max_v) {
@@ -185,17 +186,17 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     // 3 Dimensional trajectory => through carteisan space, no orientation
     const int dimension = 3;
 
-    int section_length = 4;
+    int section_length = n_of_gates - 1;
     Eigen::Affine3d p_;
     tf::poseMsgToEigen(gates.poses[0], p_);
     Eigen::Vector3d initial_p = p_.translation();
+    std::cout << p_.translation() << std::endl;
     Eigen::Vector3d current_velocity_(0.0, 0.0, 0.0);
     Eigen::Vector3d current_acceleration_(0.0, 0.0, 0.0);
 
     ROS_INFO_STREAM("Starting path generation loop!");
     // Start section planning
     for(ith_gate; ith_gate < n_of_gates - section_length; ith_gate++){
-
         // Array for all waypoints and their constrains
         mav_trajectory_generation::Vertex::Vector vertices;
         vertices.clear();
@@ -223,6 +224,7 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
 
             // set vertex point's velocity to be constrained
             tf::poseMsgToEigen(gates.poses[ith_gate + j], p_);
+            //std::cout << p_.translation() << std::endl;
             gate.addConstraint(mav_trajectory_generation::derivative_order::POSITION,
                 p_.translation());
 
@@ -251,6 +253,13 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
 
         // get trajectory as polynomial parameters
         opt.getTrajectory(&(*trajectory));
+        
+        // Update initial position for the next iteration
+        // Eigen::Vector3d
+        initial_p;
+        current_velocity_;
+        current_acceleration_;
+
 
         ROS_INFO_STREAM("Finished " << ith_gate << " iterations of the loop");
 
