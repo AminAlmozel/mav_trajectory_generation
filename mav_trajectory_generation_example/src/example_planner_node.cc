@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "simple_planner");
 
     ros::NodeHandle n;
-    ExamplePlanner planner(n);
+    PTG planner(n);
     //ROS_WARN_STREAM("SLEEPING FOR 1s TO WAIT FOR CLEAR CONSOLE");
     //ros::Duration(1.0).sleep();
 

@@ -6,14 +6,15 @@
 #include <Eigen/Dense>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <geometry_msgs/PoseArray.h>
 #include <eigen_conversions/eigen_msg.h>
 #include <mav_trajectory_generation/polynomial_optimization_nonlinear.h>
 #include <mav_trajectory_generation_ros/ros_visualization.h>
 #include <mav_trajectory_generation_ros/ros_conversions.h>
 
-class ExamplePlanner {
+class PTG {
  public:
-  ExamplePlanner(ros::NodeHandle& nh);
+  PTG(ros::NodeHandle& nh);
   void uavPathCallback(const nav_msgs::Path::ConstPtr& pose);
 
   void setMaxSpeed(double max_v);
@@ -31,20 +32,34 @@ class ExamplePlanner {
                       
   bool publishTrajectory(const mav_trajectory_generation::Trajectory& trajectory);
 
+  void gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg);
+
+  void stateCallback(const nav_msgs::Odometry::ConstPtr& msg);
+
+  void generate_path();
+
  private:
   ros::Publisher pub_markers_;
   ros::Publisher pub_trajectory_;
+  ros::Publisher pub_to_gtp;
   ros::Subscriber sub_odom_;
+  ros::Subscriber sub_to_airSim_gate;
+  ros::Subscriber sub_to_airSim_state;
 
   ros::NodeHandle& nh_;
   Eigen::Affine3d current_pose_;
   Eigen::Vector3d current_velocity_;
   Eigen::Vector3d current_angular_velocity_;
   Eigen::Affine3d* p_ = new Eigen::Affine3d[3];
+
+  geometry_msgs::PoseArray gates;
+
   double max_v_; // m/s
   double max_a_; // m/s^2
   double max_ang_v_;
   double max_ang_a_;
+  int ith_gate;
+  int n_of_gates;
 
 };
 
