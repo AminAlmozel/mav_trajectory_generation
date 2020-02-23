@@ -17,7 +17,6 @@
 class PTG {
  public:
   PTG(ros::NodeHandle& nh);
-  void uavPathCallback(const nav_msgs::Path::ConstPtr& pose);
 
   void setMaxSpeed(double max_v);
 
