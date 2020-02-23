@@ -98,11 +98,8 @@ void PTG::stateCallback(const nav_msgs::Odometry::ConstPtr& msg){
     //double t_end = 10.0;
     double duration = 1;
     double dt = 1/(2*f); // Finer sampling
+    //dt = 1/f;
     
-    //std::vector<Eigen::VectorXd> result;
-    //std::vector<double> sampling_times; // Optional.
-    //full_traj.evaluateRange(t_start, t_end, dt, derivative_order, &result);
-
     //mav_msgs::EigenTrajectoryPoint state;
     mav_msgs::EigenTrajectoryPoint::Vector local_states; // Local meaning around the current position
     //states.clear();
@@ -110,19 +107,26 @@ void PTG::stateCallback(const nav_msgs::Odometry::ConstPtr& msg){
 
     bool success;
     std::cout << "t_start: " << t_start << " t_end: " << t_start + duration << std::endl;
-    t_start = 0;
+
     success = mav_trajectory_generation::sampleTrajectoryInRange(full_traj, t_start, t_start + duration, dt, &local_states);
+    //std::vector<Eigen::VectorXd> result;
+    //std::vector<double> sampling_times; // Optional.
+    //full_traj.evaluateRange(t_start, t_end, dt, derivative_order, &result);
+
     int n_of_samples = int(floor(duration / dt));
     int j = 0;
     double min = 10000; // Any large number
+    
     for (int i = 0; i < n_of_samples; i++){
         dx = local_states[i].position_W(0) - x;
         dy = local_states[i].position_W(1) - y;
         dz = local_states[i].position_W(2) - z;
         if (dx*dx + dy*dy + dz*dz < min){
             j = i;
+            min = dx*dx + dy*dy + dz*dz;
         }
     }
+    
     j += 1; // So the drone always moves forward, even if the closes point is slightly behind it
 
     // Get a section of the trajectory starting from that point, + N time steps ahead
@@ -131,15 +135,19 @@ void PTG::stateCallback(const nav_msgs::Odometry::ConstPtr& msg){
     duration = double(N) * dt;
     mav_msgs::EigenTrajectoryPoint::Vector states;
 
-    success = mav_trajectory_generation::sampleTrajectoryInRange(full_traj, t_start, duration, dt, &states);
+    success = mav_trajectory_generation::sampleTrajectoryInRange(full_traj, t_start, t_start + duration, dt, &states);
+
 
     // Whole trajectory:
     //double sampling_interval = 0.01;
     //success = mav_trajectory_generation::sampleWholeTrajectory(full_traj, sampling_interval, &states);
 
     // Publish the trajectory to the GTP
+    pubTraj(&states);
+    
 
     // If possible, get the parameters needed for the GTP, tangent, normal, and curvature
+    // Can maybe get this from the polynomial coefficients of the segments
 
     // Generate a section of the trajectory
     generate_path();
@@ -280,7 +288,7 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     opt.getTrajectory(&(*trajectory));
     //trajectory->scaleSegmentTimesToMeetConstraints(max_v_, max_a_);
 
-    // Add segments.
+    // Append segments.
     if (ith_gate == 0){
         full_traj = *trajectory;
     }
@@ -297,10 +305,13 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     mav_msgs::EigenTrajectoryPoint state;
     //mav_msgs::EigenTrajectoryPoint::Vector states;
     // Choose a better sample time
+
+    // Using the very last segment's state as the start
     double sample_time = 0;
     std::vector<double> sTimes = full_traj.getSegmentTimes();
     for(std::vector<double>::iterator it = sTimes.begin(); it != sTimes.end(); ++it)
         sample_time += *it;
+    //std::cout << "Sample time: " << sample_time << std::endl;
     //sample_time = sTimes.back(); // Does this give the time at the start of the segment or the end of it?
     bool success = mav_trajectory_generation::sampleTrajectoryAtTime(full_traj, sample_time, &state);
 
@@ -313,7 +324,6 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
 
     // Store the trajectory in memory
 
-    // Maybe try bool Trajectory::addTrajectories(const std::vector<Trajectory>& trajectories, Trajectory* merged) const {
     //ith_gate += 1;
     ith_gate += section_length;
     if (ith_gate >= n_of_gates){
@@ -347,37 +357,22 @@ bool PTG::publishTrajectory(const mav_trajectory_generation::Trajectory& traject
     return true;
 }
 
-    /*
+void PTG::pubTraj(mav_msgs::EigenTrajectoryPoint::Vector* states){
+    
     geometry_msgs::PoseArray traj;
     geometry_msgs::Pose pos;
-    // Skip to sending the trajectory, and the initial position to the MPC
-    //geometry_msgs::Pose p;
-    double epsilon = 0.5;
-
-
-
-    double d[3] = {
-    gates.poses[ith_gate].position.x - msg->pose.pose.position.x, 
-    gates.poses[ith_gate].position.y - msg->pose.pose.position.y, 
-    gates.poses[ith_gate].position.z - msg->pose.pose.position.z};
-
-    if (d[0]*d[0] + d[1]*d[1] + d[2]*d[2] < epsilon * epsilon){
-        ith_gate += 1;
-        ROS_INFO_STREAM("Passed gate " << ith_gate << '!');
-    }
-    */
-
-       /*
+       
     traj = geometry_msgs::PoseArray(); // Making sure it's cleared
     // Sending a constant reference to the MPC
-    for(int i = 0; i < N; i++){ // Going only to the first gate
-        pos.position.x = gates.poses[ith_gate].position.x;
-        pos.position.y = gates.poses[ith_gate].position.y;
-        pos.position.z = gates.poses[ith_gate].position.z;
+    for(int i = 0; i < N; i++){ 
+        pos.position.x = (*states)[i].position_W(0);
+        pos.position.y = (*states)[i].position_W(1);
+        pos.position.z = (*states)[i].position_W(2);
         traj.poses.push_back(pos);
     }
 
     pos = geometry_msgs::Pose(); // Just making sure that the message is cleared
+    /*
 
     // Adding the initial state to the last two poses x0 = [x, y, z, x., y., z. theta, phi, psi, ...]
     pos.position.x = msg->pose.pose.position.x;
@@ -400,10 +395,12 @@ bool PTG::publishTrajectory(const mav_trajectory_generation::Trajectory& traject
     pos.orientation.y = msg->twist.twist.angular.y;
     pos.orientation.z = msg->twist.twist.angular.z;
     pos.orientation.w = 0;
+    */
 
     traj.poses.push_back(pos);
 
     pub_to_gtp.publish(traj);
     ROS_INFO_STREAM("Published trajectory to MPC");
-    */
+    
 
+}

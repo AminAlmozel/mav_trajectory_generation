@@ -38,6 +38,8 @@ class PTG {
 
   void stateCallback(const nav_msgs::Odometry::ConstPtr& msg);
 
+  void pubTraj(mav_msgs::EigenTrajectoryPoint::Vector* states);
+
   void generate_path();
 
  private:
