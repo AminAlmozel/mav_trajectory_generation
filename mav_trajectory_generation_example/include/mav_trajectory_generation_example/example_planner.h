@@ -45,6 +45,8 @@ class PTG {
   ros::Publisher pub_markers_;
   ros::Publisher pub_trajectory_;
   ros::Publisher pub_to_gtp;
+  
+  ros::Publisher pubControl; // temp
   ros::Subscriber sub_odom_;
   ros::Subscriber sub_to_airSim_gate;
   ros::Subscriber sub_to_airSim_state;
