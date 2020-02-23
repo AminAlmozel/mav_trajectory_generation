@@ -71,6 +71,8 @@ class PTG {
   int ith_gate;
   int n_of_gates;
   int section_length;
+  double t_start;
+  bool processed_gates;
 
 };
 

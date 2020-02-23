@@ -32,11 +32,14 @@ PTG::PTG(ros::NodeHandle& nh) :
 
     current_velocity_ = Eigen::Vector3d(0.0, 0.0, 0.0);
     current_acceleration_ = Eigen::Vector3d(0.0, 0.0, 0.0);
+    t_start = 2 * 1/f; // Two time steps
+    processed_gates = 0;
 
     ROS_INFO_STREAM("Initialized Planner node");
 }
 
 void PTG::gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg){
+    if(~processed_gates){ // To only process the gates once
     ROS_INFO_STREAM("Received gate poses!");
 
     int n_of_poses = int(msg->poses[0].position.x);
@@ -68,113 +71,79 @@ void PTG::gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg){
     Eigen::Vector3d current_position_ = p_.translation();
 
     ROS_INFO_STREAM("Processed gate poses!");
+    processed_gates = 1;
     generate_path();
+    }
 
 }
 
 void PTG::stateCallback(const nav_msgs::Odometry::ConstPtr& msg){
+    if(processed_gates){ // Only call this function when the gates' positions have been received and processed
     std::cout << ith_gate << std::endl;
     ROS_INFO_STREAM("Received state (Odometry message)!");
+    double x, y, z;
+    double dx, dy, dz;
+
     // Get the position from the message
+    x = msg->pose.pose.position.x;
+    y = msg->pose.pose.position.y;
+    z = msg->pose.pose.position.z;
 
     // Find the closest point to it in the trajectory
-    double sampling_time = 2.0;
-    int derivative_order = mav_trajectory_generation::derivative_order::POSITION;
-    double t_start = 2.0;
-    double t_end = 10.0;
-    double dt = 0.01;
-    std::vector<Eigen::VectorXd> result;
+    // By first sampling a short time, finding the closest point to the current position, and then using that to sample the trajectory
+    //double sampling_time = 2.0;
+    //int derivative_order = mav_trajectory_generation::derivative_order::POSITION;
+
+    t_start -= 2 * 1/f;
+    //double t_end = 10.0;
+    double duration = 1;
+    double dt = 1/(2*f); // Finer sampling
+    
+    //std::vector<Eigen::VectorXd> result;
     //std::vector<double> sampling_times; // Optional.
-    trajectory->evaluateRange(t_start, t_end, dt, derivative_order, &result);
+    //full_traj.evaluateRange(t_start, t_end, dt, derivative_order, &result);
 
     //mav_msgs::EigenTrajectoryPoint state;
+    mav_msgs::EigenTrajectoryPoint::Vector local_states; // Local meaning around the current position
+    //states.clear();
+    //states.reserve(states.size());
+
+    bool success;
+    std::cout << "t_start: " << t_start << " t_end: " << t_start + duration << std::endl;
+    t_start = 0;
+    success = mav_trajectory_generation::sampleTrajectoryInRange(full_traj, t_start, t_start + duration, dt, &local_states);
+    int n_of_samples = int(floor(duration / dt));
+    int j = 0;
+    double min = 10000; // Any large number
+    for (int i = 0; i < n_of_samples; i++){
+        dx = local_states[i].position_W(0) - x;
+        dy = local_states[i].position_W(1) - y;
+        dz = local_states[i].position_W(2) - z;
+        if (dx*dx + dy*dy + dz*dz < min){
+            j = i;
+        }
+    }
+    j += 1; // So the drone always moves forward, even if the closes point is slightly behind it
+
+    // Get a section of the trajectory starting from that point, + N time steps ahead
+    t_start = t_start + j * dt;
+    dt = 1/double(f);
+    duration = double(N) * dt;
     mav_msgs::EigenTrajectoryPoint::Vector states;
 
-    // Sample range:
-    //double t_start = 2.0;
-    double duration = 10.0;
-    //double dt = 0.01;
-    bool success;
     success = mav_trajectory_generation::sampleTrajectoryInRange(full_traj, t_start, duration, dt, &states);
 
     // Whole trajectory:
-    double sampling_interval = 0.01;
-    success = mav_trajectory_generation::sampleWholeTrajectory(full_traj, sampling_interval, &states);
-    /*
-    geometry_msgs::PoseArray traj;
-    geometry_msgs::Pose pos;
-    // Skip to sending the trajectory, and the initial position to the MPC
-    //geometry_msgs::Pose p;
-    double epsilon = 0.5;
-
-
-    double d[3] = {
-    gates.poses[ith_gate].position.x - msg->pose.pose.position.x, 
-    gates.poses[ith_gate].position.y - msg->pose.pose.position.y, 
-    gates.poses[ith_gate].position.z - msg->pose.pose.position.z};
-
-    if (d[0]*d[0] + d[1]*d[1] + d[2]*d[2] < epsilon * epsilon){
-        ith_gate += 1;
-        ROS_INFO_STREAM("Passed gate " << ith_gate << '!');
-    }
-    */
-
-    // Get a section of the trajectory starting from that point, + N time steps ahead
-    /*
-    // Sample range:
-    double t_start = 2.0;
-    double t_end = 10.0;
-    double dt = 0.01;
-    std::vector<Eigen::VectorXd> result;
-    //std::vector<double> sampling_times; // Optional.
-    trajectory.evaluateRange(t_start, t_end, dt, derivative_order, &result, &sampling_times);
-    */
+    //double sampling_interval = 0.01;
+    //success = mav_trajectory_generation::sampleWholeTrajectory(full_traj, sampling_interval, &states);
 
     // Publish the trajectory to the GTP
-    /*
-    traj = geometry_msgs::PoseArray(); // Making sure it's cleared
-    // Sending a constant reference to the MPC
-    for(int i = 0; i < N; i++){ // Going only to the first gate
-        pos.position.x = gates.poses[ith_gate].position.x;
-        pos.position.y = gates.poses[ith_gate].position.y;
-        pos.position.z = gates.poses[ith_gate].position.z;
-        traj.poses.push_back(pos);
-    }
-
-    pos = geometry_msgs::Pose(); // Just making sure that the message is cleared
-
-    // Adding the initial state to the last two poses x0 = [x, y, z, x., y., z. theta, phi, psi, ...]
-    pos.position.x = msg->pose.pose.position.x;
-    pos.position.y = msg->pose.pose.position.y;
-    pos.position.z = msg->pose.pose.position.z;
-
-    pos.orientation.x = msg->pose.pose.orientation.x;
-    pos.orientation.y = msg->pose.pose.orientation.y;
-    pos.orientation.z = msg->pose.pose.orientation.z;
-    pos.orientation.w = 0;
-
-    traj.poses.push_back(pos);
-
-    pos = geometry_msgs::Pose(); // Just making sure that the message is cleared
-    pos.position.x = msg->twist.twist.linear.x;
-    pos.position.y = msg->twist.twist.linear.y;
-    pos.position.z = msg->twist.twist.linear.z;
-
-    pos.orientation.x = msg->twist.twist.angular.x;
-    pos.orientation.y = msg->twist.twist.angular.y;
-    pos.orientation.z = msg->twist.twist.angular.z;
-    pos.orientation.w = 0;
-
-    traj.poses.push_back(pos);
-
-    pub_to_gtp.publish(traj);
-    ROS_INFO_STREAM("Published trajectory to MPC");
-    */
 
     // If possible, get the parameters needed for the GTP, tangent, normal, and curvature
 
     // Generate a section of the trajectory
     generate_path();
+    }
 
 }
 
@@ -212,19 +181,22 @@ void PTG::uavPathCallback(const nav_msgs::Path::ConstPtr& path) {
 }
 
 void PTG::generate_path(){
-    if (ith_gate + section_length < n_of_gates){
+    if (ith_gate < n_of_gates){
         std::chrono::time_point<std::chrono::system_clock> m_StartTime = std::chrono::system_clock::now();
 
         mav_trajectory_generation::Trajectory trajectory;
 
         planTrajectory(&trajectory);
 
-        publishTrajectory(trajectory);
-        ROS_WARN("Trajectory published");
+        //publishTrajectory(trajectory);
+        //ROS_WARN("Trajectory published");
 
         std::chrono::time_point<std::chrono::system_clock> m_EndTime = std::chrono::system_clock::now();
         std::cout << "It took: ";
-        std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(m_EndTime - m_StartTime).count()/1000.0;
+        std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(m_EndTime - m_StartTime).count()/1000.0 << std::endl;
+    }
+    else{
+        publishTrajectory(full_traj);
     }
 
 }
@@ -262,7 +234,7 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
             current_acceleration_);
     vertices.push_back(gate);
 
-    for (int j = 1; j < section_length; j++) {
+    for (int j = 1; j < section_length && ith_gate + j < n_of_gates; j++) {
         // Vertex::Vector createSquareVertices
         mav_trajectory_generation::Vertex gate(dimension);
 
@@ -306,13 +278,13 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
 
     // get trajectory as polynomial parameters
     opt.getTrajectory(&(*trajectory));
-    trajectory->scaleSegmentTimesToMeetConstraints(max_v_, max_a_);
+    //trajectory->scaleSegmentTimesToMeetConstraints(max_v_, max_a_);
 
     // Add segments.
     if (ith_gate == 0){
         full_traj = *trajectory;
     }
-    
+
     else{
         mav_trajectory_generation::Segment::Vector segments;
 
@@ -321,30 +293,21 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
         full_traj.addSegments(segments);        
     }
 
-
-
-
-
-    /*
-    std::vector<mav_trajectory_generation::Trajectory> trajectories;
-    const std::vector<mav_trajectory_generation::Trajectory>& t = {full_traj, (*trajectory)};
-
-    //trajectories.push_back(full_traj);
-    //trajectories.push_back((*trajectory));
-    mav_trajectory_generation::Trajectory::addTrajectories(&t, &full_traj);
-    for (const Trajectory& t : trajectories) {
-        // Add segments.
-        Segment::Vector segments;
-        t.getSegments(&segments);
-        merged->addSegments(segments);
-    }
-    */
-
     // Update initial position for the next iteration
+    mav_msgs::EigenTrajectoryPoint state;
+    //mav_msgs::EigenTrajectoryPoint::Vector states;
+    // Choose a better sample time
+    double sample_time = 0;
+    std::vector<double> sTimes = full_traj.getSegmentTimes();
+    for(std::vector<double>::iterator it = sTimes.begin(); it != sTimes.end(); ++it)
+        sample_time += *it;
+    //sample_time = sTimes.back(); // Does this give the time at the start of the segment or the end of it?
+    bool success = mav_trajectory_generation::sampleTrajectoryAtTime(full_traj, sample_time, &state);
+
     // Eigen::Vector3d
-    current_position_;
-    current_velocity_;
-    current_acceleration_;
+    current_position_ = state.position_W; // Use the position of the last gate in this iteration as the start of the next iteration
+    current_velocity_ = state.velocity_W;
+    current_acceleration_ = state.acceleration_W;
 
     ROS_INFO_STREAM("Finished " << ith_gate << " iterations of the loop");
 
@@ -353,10 +316,10 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     // Maybe try bool Trajectory::addTrajectories(const std::vector<Trajectory>& trajectories, Trajectory* merged) const {
     //ith_gate += 1;
     ith_gate += section_length;
-    if (ith_gate == n_of_gates){
+    if (ith_gate >= n_of_gates){
+        ith_gate = n_of_gates;
         ROS_INFO_STREAM("Finished generating the whole trajectory");
     }
-
 
     return true;
 }
@@ -383,4 +346,64 @@ bool PTG::publishTrajectory(const mav_trajectory_generation::Trajectory& traject
 
     return true;
 }
+
+    /*
+    geometry_msgs::PoseArray traj;
+    geometry_msgs::Pose pos;
+    // Skip to sending the trajectory, and the initial position to the MPC
+    //geometry_msgs::Pose p;
+    double epsilon = 0.5;
+
+
+
+    double d[3] = {
+    gates.poses[ith_gate].position.x - msg->pose.pose.position.x, 
+    gates.poses[ith_gate].position.y - msg->pose.pose.position.y, 
+    gates.poses[ith_gate].position.z - msg->pose.pose.position.z};
+
+    if (d[0]*d[0] + d[1]*d[1] + d[2]*d[2] < epsilon * epsilon){
+        ith_gate += 1;
+        ROS_INFO_STREAM("Passed gate " << ith_gate << '!');
+    }
+    */
+
+       /*
+    traj = geometry_msgs::PoseArray(); // Making sure it's cleared
+    // Sending a constant reference to the MPC
+    for(int i = 0; i < N; i++){ // Going only to the first gate
+        pos.position.x = gates.poses[ith_gate].position.x;
+        pos.position.y = gates.poses[ith_gate].position.y;
+        pos.position.z = gates.poses[ith_gate].position.z;
+        traj.poses.push_back(pos);
+    }
+
+    pos = geometry_msgs::Pose(); // Just making sure that the message is cleared
+
+    // Adding the initial state to the last two poses x0 = [x, y, z, x., y., z. theta, phi, psi, ...]
+    pos.position.x = msg->pose.pose.position.x;
+    pos.position.y = msg->pose.pose.position.y;
+    pos.position.z = msg->pose.pose.position.z;
+
+    pos.orientation.x = msg->pose.pose.orientation.x;
+    pos.orientation.y = msg->pose.pose.orientation.y;
+    pos.orientation.z = msg->pose.pose.orientation.z;
+    pos.orientation.w = 0;
+
+    traj.poses.push_back(pos);
+
+    pos = geometry_msgs::Pose(); // Just making sure that the message is cleared
+    pos.position.x = msg->twist.twist.linear.x;
+    pos.position.y = msg->twist.twist.linear.y;
+    pos.position.z = msg->twist.twist.linear.z;
+
+    pos.orientation.x = msg->twist.twist.angular.x;
+    pos.orientation.y = msg->twist.twist.angular.y;
+    pos.orientation.z = msg->twist.twist.angular.z;
+    pos.orientation.w = 0;
+
+    traj.poses.push_back(pos);
+
+    pub_to_gtp.publish(traj);
+    ROS_INFO_STREAM("Published trajectory to MPC");
+    */
 
