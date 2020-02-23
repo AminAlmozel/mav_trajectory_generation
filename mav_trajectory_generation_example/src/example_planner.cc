@@ -43,6 +43,10 @@ void PTG::gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg){
     n_of_gates = n_of_poses - 1;
     //section_length = n_of_gates - 1;
     section_length = 4;
+    /* Use this to reserve segment sizes
+    Segment::Vector segments;
+    segments.reserve(segments_.size());
+    */
 
     geometry_msgs::Pose pos;
     // Store the gates' poses and the initial position locally
@@ -74,6 +78,28 @@ void PTG::stateCallback(const nav_msgs::Odometry::ConstPtr& msg){
     // Get the position from the message
 
     // Find the closest point to it in the trajectory
+    double sampling_time = 2.0;
+    int derivative_order = mav_trajectory_generation::derivative_order::POSITION;
+    double t_start = 2.0;
+    double t_end = 10.0;
+    double dt = 0.01;
+    std::vector<Eigen::VectorXd> result;
+    //std::vector<double> sampling_times; // Optional.
+    trajectory->evaluateRange(t_start, t_end, dt, derivative_order, &result);
+
+    //mav_msgs::EigenTrajectoryPoint state;
+    mav_msgs::EigenTrajectoryPoint::Vector states;
+
+    // Sample range:
+    //double t_start = 2.0;
+    double duration = 10.0;
+    //double dt = 0.01;
+    bool success;
+    success = mav_trajectory_generation::sampleTrajectoryInRange(full_traj, t_start, duration, dt, &states);
+
+    // Whole trajectory:
+    double sampling_interval = 0.01;
+    success = mav_trajectory_generation::sampleWholeTrajectory(full_traj, sampling_interval, &states);
     /*
     geometry_msgs::PoseArray traj;
     geometry_msgs::Pose pos;
@@ -94,6 +120,15 @@ void PTG::stateCallback(const nav_msgs::Odometry::ConstPtr& msg){
     */
 
     // Get a section of the trajectory starting from that point, + N time steps ahead
+    /*
+    // Sample range:
+    double t_start = 2.0;
+    double t_end = 10.0;
+    double dt = 0.01;
+    std::vector<Eigen::VectorXd> result;
+    //std::vector<double> sampling_times; // Optional.
+    trajectory.evaluateRange(t_start, t_end, dt, derivative_order, &result, &sampling_times);
+    */
 
     // Publish the trajectory to the GTP
     /*
@@ -249,6 +284,14 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     mav_trajectory_generation::NonlinearOptimizationParameters parameters;
 
     // set up optimization problem
+    /*    
+    parameters.max_iterations = 1000;
+    parameters.f_rel = 0.05;
+    parameters.x_rel = 0.1;
+    parameters.time_penalty = 500.0;
+    parameters.initial_stepsize_rel = 0.1;
+    parameters.inequality_constraint_tolerance = 0.1;
+    */
     const int K = 10;
     mav_trajectory_generation::PolynomialOptimizationNonLinear<K> opt(dimension, parameters);
     opt.setupFromVertices(vertices, segment_times, derivative_to_optimize);
@@ -259,6 +302,7 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
 
     // solve trajectory
     opt.optimize();
+    //opt.solveLinear();
 
     // get trajectory as polynomial parameters
     opt.getTrajectory(&(*trajectory));
@@ -268,6 +312,7 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     if (ith_gate == 0){
         full_traj = *trajectory;
     }
+    
     else{
         mav_trajectory_generation::Segment::Vector segments;
 
@@ -275,6 +320,8 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
 
         full_traj.addSegments(segments);        
     }
+
+
 
 
 

@@ -8,9 +8,11 @@
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseArray.h>
 #include <eigen_conversions/eigen_msg.h>
+#include <mav_trajectory_generation/trajectory_sampling.h>
 #include <mav_trajectory_generation/polynomial_optimization_nonlinear.h>
 #include <mav_trajectory_generation_ros/ros_visualization.h>
 #include <mav_trajectory_generation_ros/ros_conversions.h>
+
 
 class PTG {
  public:
