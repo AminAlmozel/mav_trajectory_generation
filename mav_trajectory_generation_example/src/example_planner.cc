@@ -356,6 +356,7 @@ void PTG::pubTraj(mav_msgs::EigenTrajectoryPoint::Vector* states, const nav_msgs
     std::cout << (*states)[1].velocity_W << std::endl;
     pubControl.publish(cont);
 
+    traj.header.frame_id = "world";
     pub_to_gtp.publish(traj);
     ROS_INFO_STREAM("Published trajectory to GTP");
 
