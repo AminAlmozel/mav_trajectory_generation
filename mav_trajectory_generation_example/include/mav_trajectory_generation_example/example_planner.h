@@ -48,8 +48,8 @@ class PTG {
   
   ros::Publisher pubControl; // temp
   ros::Subscriber sub_odom_;
-  ros::Subscriber sub_to_airSim_gate;
-  ros::Subscriber sub_to_airSim_state;
+  ros::Subscriber sub_to_controller_state;
+  ros::Subscriber sub_to_controller_gate;
 
   mav_trajectory_generation::Trajectory full_traj;
 
