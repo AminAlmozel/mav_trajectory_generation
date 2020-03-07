@@ -7,16 +7,16 @@
 
 PTG::PTG(ros::NodeHandle& nh) :
     nh_(nh),
-    max_v_(15.0),
-    max_a_(7.0),
+    max_v_(30.0),
+    max_a_(15.0),
     current_velocity_(Eigen::Vector3d::Zero()) {
 
     ith_gate = 0;
     section_length = 4; // Changed later in the gateCallback method
 
     // Controller
-    sub_to_controller_state = nh.subscribe("/drone_1/state", 1, &PTG::stateCallback, this);
-    sub_to_controller_gate = nh.subscribe("controller_gate", 1, &PTG::gateCallback, this);
+    sub_to_controller_state = nh.subscribe("/drone_1/state", 1, &PTG::state_callback, this);
+    sub_to_controller_gate = nh.subscribe("/controller/gates", 1, &PTG::gate_callback, this);
 
     // Temporary, for testing
     pubControl = nh.advertise<geometry_msgs::Quaternion>("control", 2);
@@ -36,7 +36,7 @@ PTG::PTG(ros::NodeHandle& nh) :
     ROS_INFO_STREAM("Initialized Planner node");
 }
 
-void PTG::gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg){
+void PTG::gate_callback(const geometry_msgs::PoseArray::ConstPtr& msg){
     if(~processed_gates){ // To only process the gates once
     ROS_INFO_STREAM("Received gate poses!");
 
@@ -48,9 +48,8 @@ void PTG::gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg){
     Segment::Vector segments;
     segments.reserve(segments_.size());
     */
-
     geometry_msgs::Pose pos;
-    // Store the gates' poses and the initial position locally
+    // Store the initial position and the gates' poses locally
     for(int i = 1; i < n_of_poses; i++){
         pos.position.x = msg->poses[i].position.x;
         pos.position.y = msg->poses[i].position.y;
@@ -60,14 +59,15 @@ void PTG::gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg){
         pos.orientation.y = msg->poses[i].orientation.y;
         pos.orientation.z = msg->poses[i].orientation.z;
         pos.orientation.w = msg->poses[i].orientation.w;
-        
+
         gates.poses.push_back(pos);
     }
+
     // For use in PlanTrajectory
     Eigen::Affine3d p_;
     tf::poseMsgToEigen(gates.poses[0], p_);
     Eigen::Vector3d current_position_ = p_.translation();
-
+    
     ROS_INFO_STREAM("Processed gate poses!\n");
     processed_gates = 1;
     generate_path();
@@ -75,7 +75,7 @@ void PTG::gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg){
 
 }
 
-void PTG::stateCallback(const nav_msgs::Odometry::ConstPtr& msg){
+void PTG::state_callback(const nav_msgs::Odometry::ConstPtr& msg){
 
     if(processed_gates){ // Only call this function when the gates' positions have been received and processed
     std::cout << ith_gate << std::endl;
@@ -228,6 +228,9 @@ bool PTG::planTrajectory(mav_trajectory_generation::Trajectory* trajectory) {
     std::vector<double> segment_times;
     segment_times = estimateSegmentTimes(vertices, max_v_, max_a_);
 
+    for (std::vector<double>::const_iterator i = segment_times.begin(); i != segment_times.end(); ++i)
+        std::cout << *i << ' ';
+    std::cout << std::endl;
     // Set up polynomial solver with default params
     mav_trajectory_generation::NonlinearOptimizationParameters parameters;
 
@@ -310,6 +313,7 @@ void PTG::pubTraj(mav_msgs::EigenTrajectoryPoint::Vector* states, const nav_msgs
     traj = geometry_msgs::PoseArray(); // Making sure it's cleared
     pos = geometry_msgs::Pose(); // Just making sure that the message is cleared
 
+    traj.header.frame_id = "world";
     // Adding the initial state to the first two poses x0 = [x, y, z, x., y., z. theta, phi, psi, ...]
     pos.position.x = msg->pose.pose.position.x;
     pos.position.y = msg->pose.pose.position.y;
@@ -342,6 +346,8 @@ void PTG::pubTraj(mav_msgs::EigenTrajectoryPoint::Vector* states, const nav_msgs
         traj.poses.push_back(pos);
     }
 
+    pub_to_gtp.publish(traj);
+
     //This is temporary
     // Publish a 4d vector (Overloaded as a quaternion message for convenience) as the 4 control inputs to the quadcopter
     geometry_msgs::Quaternion cont;
@@ -353,12 +359,9 @@ void PTG::pubTraj(mav_msgs::EigenTrajectoryPoint::Vector* states, const nav_msgs
     cont.z = (*states)[1].velocity_W(2) + (*states)[1].acceleration_W(2) * 1/double(f);
     cont.w = 0;
     std::cout << (*states)[1].velocity_W << std::endl;
-    pubControl.publish(cont);
+    //pubControl.publish(cont);
 
-    traj.header.frame_id = "world";
-    pub_to_gtp.publish(traj);
     ROS_INFO_STREAM("Published trajectory to GTP");
-
 }
 
 bool PTG::publishTrajectory(const mav_trajectory_generation::Trajectory& trajectory) {

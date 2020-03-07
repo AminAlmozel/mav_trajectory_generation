@@ -33,9 +33,9 @@ class PTG {
                       
   bool publishTrajectory(const mav_trajectory_generation::Trajectory& trajectory);
 
-  void gateCallback(const geometry_msgs::PoseArray::ConstPtr& msg);
+  void gate_callback(const geometry_msgs::PoseArray::ConstPtr& msg);
 
-  void stateCallback(const nav_msgs::Odometry::ConstPtr& msg);
+  void state_callback(const nav_msgs::Odometry::ConstPtr& msg);
 
   void pubTraj(mav_msgs::EigenTrajectoryPoint::Vector* states, const nav_msgs::Odometry::ConstPtr& msg);
 
